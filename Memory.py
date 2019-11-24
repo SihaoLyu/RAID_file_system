@@ -35,6 +35,10 @@ def __checksum__(data):
 	return checksum_md5
 
 
+def __if_data_block_match_checksum__(data):
+	return data[config.BLOCK_SIZE*8 : config.WHOLE_BLOCK_SIZE*8] == __checksum__(data[: config.BLOCK_SIZE*8])
+
+
 def __raid_block_mapping__(block_number):
 	server_sets_size = config.TOTAL_NO_OF_BLOCKS * (4 - 1)		# DATA BLOCKS NUMBER (NOT PARITY BLOCKS)
 	server_sets_offset = block_number / server_sets_size
@@ -60,7 +64,8 @@ def __raid_read_block__(block_number):
 
 	if des_server_id not in fail_servers:
 		response = client.read(des_server_id, server_block_num*config.BLOCK_SIZE, config.BLOCK_SIZE)
-		if response != None: return __ascii_2_str__(response)
+		if response != None:	
+			if __if_data_block_match_checksum__(response):	return response[: config.BLOCK_SIZE*8]
 		else:	fail_servers.append(des_server_id)
 
 	rec_data = [None for _ in range(3)]
@@ -74,20 +79,25 @@ def __raid_read_block__(block_number):
 		if response == None:
 			print('FATAL ERROR! MORE THAN TWO RAID DISKS DECAY!')
 			quit()
-		else:	rec_data.append(response)
+		else:	
+			if not __if_data_block_match_checksum__(response):
+				print('FATAL ERROR! MORE THAN TWO RAID DISKS DECAY!')
+				quit()
+			rec_data.append(int(response[: config.BLOCK_SIZE*8],2))
 
-	new_data = rec_data[0] ^ rec_data[1] ^ rec_data[2]
+	new_data = bin(rec_data[0] ^ rec_data[1] ^ rec_data[2]).replace('0b', '', 1).zfill(config.BLOCK_SIZE)
 	return new_data
 
 		
 def __raid_write_block__(block_number, data):
 	# data is binary
-	if block_number >= config.TOTAL_NO_OF_BLOCKS or len(data)/8 > config.BLOCK_SIZE:	return -1
+	if block_number >= config.TOTAL_NO_OF_BLOCKS or len(data)/8 != config.BLOCK_SIZE:	return -1
 	des_server_id, server_sets_offset, server_block_num, parity_server_id = __raid_block_mapping__(block_number)
 	fail_count = 0
 	parity_data = []
 	parity = None
 	des = None
+	data = int(data, 2)
 
 	# check servers
 	for server_id in range(server_sets_offset*4, server_sets_offset*4+4):
@@ -99,12 +109,18 @@ def __raid_write_block__(block_number, data):
 		response = client.read(server_id, server_block_num*config.BLOCK_SIZE, config.BLOCK_SIZE)
 		if response == None:	
 			fail_servers.append(server_id)
-			parity_data.append(response)
+			parity_data.append(None)
 			fail_count += 1
 			continue
-		if server_id == des_server_id: des = response
-		elif server_id == parity_server_id: parity = response
-		else:	parity_data.append(response)
+		if server_id == des_server_id: 
+			if __if_data_block_match_checksum__(response):	des = int(response[: config.BLOCK_SIZE], 2)
+			else: fail_count += 1
+		elif server_id == parity_server_id: 
+			if __if_data_block_match_checksum__(response):	parity = int(response[: config.BLOCK_SIZE], 2)
+			else:	fail_count += 1
+		else:	
+			if __if_data_block_match_checksum__(response):	parity_data.append(int(response[: config.BLOCK_SIZE], 2))
+			else: fail_count += 1
 
 	# calculate parity according to failure condition
 	if fail_count >= 2:
@@ -127,13 +143,18 @@ def __raid_write_block__(block_number, data):
 			parity = data
 			for pdata in parity_data: parity ^= pdata
 	
+	# write parity and data
 	if des != None: 
+		data = bin(data).replace('0b', '', 1).zfill(config.BLOCK_SIZE*8)
+		data += __checksum__(data)
 		response = client.write(des_server_id, server_block_num*config.BLOCK_SIZE, data)
 		if response == None:
 			fail_servers.append(des_server_id)
-			return -1
+			# return -1
 	
 	if parity != None:
+		parity = bin(parity).replace('0b', '', 1).zfill(config.BLOCK_SIZE*8)
+		parity += __checksum__(parity)
 		response = client.write(parity_server_id, server_block_num*config.BLOCK_SIZE, parity)
 		if response == None:
 			fail_servers.append(parity_server_id)
@@ -183,8 +204,8 @@ class Operations():
 		
 		elif block_number >= sblock.INODE_BLOCKS_OFFSET and block_number < sblock.DATA_BLOCKS_OFFSET:
 			inode_block = []
-			inode_offset = (block_number - sblock.INODE_BLOCKS_OFFSET) * (config.BLOCK_SIZE / config.INODE_SIZE)
-			for inode_number in range(inode_offset, inode_offset + config.BLOCK_SIZE/config.INODE_SIZE):
+			inode_offset = (block_number - sblock.INODE_BLOCKS_OFFSET) * sblock.INODES_PER_BLOCK
+			for inode_number in range(inode_offset, inode_offset + sblock.INODES_PER_BLOCK):
 				inode_block.append(self.inode_number_to_inode(inode_number))
 			return inode_block
 		
@@ -393,4 +414,11 @@ if __name__ == '__main__':
 	# print a_inode
 	# print
 	# print a_inode == op.inode_number_to_inode(1, temp)
+	
+	# data= '01' * config.BLOCK_SIZE * 4
+	# t = data
+	# data = int(data, 2)
+	# data = bin(data).replace('0b', '', 1).zfill(config.BLOCK_SIZE*8)
+	# print data == t
+
 	pass

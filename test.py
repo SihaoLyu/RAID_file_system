@@ -35,4 +35,4 @@ import pickle, math
 # a = pickle.dumps(a)
 # print a
 
-print list(['\x00', '\x00'])
+print int(False)

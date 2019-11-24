@@ -10,5 +10,7 @@ def __ckecksum__(data):
 
 
 if __name__ == '__main__':
-	a = '0' * 496
-	print __ckecksum__(a)
+	# a = '0' * 496 * 8
+	# a += __ckecksum__(a)
+	# print len(a[-16*8:]) / 8
+	print __ckecksum__(None)
