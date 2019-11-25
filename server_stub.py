@@ -1,5 +1,5 @@
 # SKELETON CODE FOR SERVER STUB HW4
-import xmlrpclib
+import xmlrpclib, sys
 from SimpleXMLRPCServer import SimpleXMLRPCServer
 
 import pickle , Disk
@@ -18,17 +18,23 @@ def write(offset, data):
 	data = pickle.loads(data)
 	return disk.write(offset, data)
 
+port = int(sys.argv[1])
+server = SimpleXMLRPCServer(("localhost", port))
+server.register_function(read, "read")
+server.register_function(write, "write")
+server.serve_forever()
+
 
 if __name__ == '__main__':
-	port = input("Type in port number: ")
-	server = SimpleXMLRPCServer(("", port))
-	print("Listening on port " + str(port) + "....")
+	# port = input("Type in port number: ")
+	# server = SimpleXMLRPCServer(("", port))
+	# print("Listening on port " + str(port) + "....")
 
-	server.register_function(read, "read")
-	server.register_function(write, "write")
+	# server.register_function(read, "read")
+	# server.register_function(write, "write")
 
-	server.serve_forever()	
-
+	# server.serve_forever()	
+	pass
 
 
 
