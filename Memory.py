@@ -63,7 +63,7 @@ def __raid_read_block__(block_number):
 	des_server_id, server_sets_offset, server_block_num, _ = __raid_block_mapping__(block_number)
 
 	if des_server_id not in fail_servers:
-		response = client.read(des_server_id, server_block_num*config.BLOCK_SIZE, config.BLOCK_SIZE)
+		response = client.read(des_server_id, server_block_num*config.WHOLE_BLOCK_SIZE, config.WHOLE_BLOCK_SIZE)
 		if response != None:	
 			if __if_data_block_match_checksum__(response):	return response[: config.BLOCK_SIZE*8]
 		else:	fail_servers.append(des_server_id)
@@ -75,7 +75,7 @@ def __raid_read_block__(block_number):
 		if server_id in fail_servers:
 			print('FATAL ERROR! MORE THAN TWO RAID DISKS DECAY!')
 			quit()
-		response = client.read(server_id, server_block_num*config.BLOCK_SIZE, config.BLOCK_SIZE)
+		response = client.read(server_id, server_block_num*config.WHOLE_BLOCK_SIZE, config.WHOLE_BLOCK_SIZE)
 		if response == None:
 			print('FATAL ERROR! MORE THAN TWO RAID DISKS DECAY!')
 			quit()
@@ -106,20 +106,20 @@ def __raid_write_block__(block_number, data):
 			parity_data.append(None)
 			fail_count += 1
 			continue
-		response = client.read(server_id, server_block_num*config.BLOCK_SIZE, config.BLOCK_SIZE)
+		response = client.read(server_id, server_block_num*config.WHOLE_BLOCK_SIZE, config.WHOLE_BLOCK_SIZE)
 		if response == None:	
 			fail_servers.append(server_id)
 			parity_data.append(None)
 			fail_count += 1
 			continue
 		if server_id == des_server_id: 
-			if __if_data_block_match_checksum__(response):	des = int(response[: config.BLOCK_SIZE], 2)
+			if __if_data_block_match_checksum__(response):	des = int(response[: config.BLOCK_SIZE*8], 2)
 			else: fail_count += 1
 		elif server_id == parity_server_id: 
-			if __if_data_block_match_checksum__(response):	parity = int(response[: config.BLOCK_SIZE], 2)
+			if __if_data_block_match_checksum__(response):	parity = int(response[: config.BLOCK_SIZE*8], 2)
 			else:	fail_count += 1
 		else:	
-			if __if_data_block_match_checksum__(response):	parity_data.append(int(response[: config.BLOCK_SIZE], 2))
+			if __if_data_block_match_checksum__(response):	parity_data.append(int(response[: config.BLOCK_SIZE*8], 2))
 			else: fail_count += 1
 
 	# calculate parity according to failure condition
@@ -147,7 +147,7 @@ def __raid_write_block__(block_number, data):
 	if des != None: 
 		data = bin(data).replace('0b', '', 1).zfill(config.BLOCK_SIZE*8)
 		data += __checksum__(data)
-		response = client.write(des_server_id, server_block_num*config.BLOCK_SIZE, data)
+		response = client.write(des_server_id, server_block_num*config.WHOLE_BLOCK_SIZE, data)
 		if response == None:
 			fail_servers.append(des_server_id)
 			# return -1
@@ -155,7 +155,7 @@ def __raid_write_block__(block_number, data):
 	if parity != None:
 		parity = bin(parity).replace('0b', '', 1).zfill(config.BLOCK_SIZE*8)
 		parity += __checksum__(parity)
-		response = client.write(parity_server_id, server_block_num*config.BLOCK_SIZE, parity)
+		response = client.write(parity_server_id, server_block_num*config.WHOLE_BLOCK_SIZE, parity)
 		if response == None:
 			fail_servers.append(parity_server_id)
 
@@ -172,15 +172,21 @@ def __initialize__(server_num):
 	#ALLOCATING INODE BLOCKS
 	sblock.INODE_BLOCKS_OFFSET = count
 	for _ in range(0, (sblock.MAX_NUM_INODES * sblock.INODE_SIZE) / sblock.BLOCK_SIZE):		#for Inode blocks
+		init_data = __str_2_ascii__('\0' * config.BLOCK_SIZE)
+		__raid_write_block__(count, init_data)
 		count  += 1
 	#ALLOCATING DATA BLOCKS
 	sblock.DATA_BLOCKS_OFFSET = count
+	for blk_num in range(count, sblock.TOTAL_NO_OF_BLOCKS):
+		init_data = __str_2_ascii__('\0' * config.BLOCK_SIZE)
+		__raid_write_block__(blk_num, init_data)
 	#MAKING BLOCKS BEFORE DATA BLOCKS UNAVAILABLE FOR USE SINCE OCCUPIED BY SUPERBLOCK, BOOTBLOCK, BITMAP AND INODE TABLE
 	bitmap_block = '2' * sblock.DATA_BLOCKS_OFFSET
 	if len(bitmap_block) % config.BLOCK_SIZE != 0:
 		bitmap_block += '0' * (config.BLOCK_SIZE - len(bitmap_block) % config.BLOCK_SIZE)
 	for b_blk in range(len(bitmap_block) / config.BLOCK_SIZE):
-		__raid_write_block__(2+b_blk, __str_2_ascii__(bitmap_block[b_blk*config.BLOCK_SIZE : (b_blk+1)*config.BLOCK_SIZE]))
+		b_blk += sblock.BITMAP_BLOCKS_OFFSET
+		__raid_write_block__(b_blk, __str_2_ascii__(bitmap_block[b_blk*config.BLOCK_SIZE : (b_blk+1)*config.BLOCK_SIZE]))
 	
 	
 #OPERATIONS ON FILE SYSTEM
@@ -234,7 +240,7 @@ class Operations():
 
 	#REMOVES THE INVALID DATA BLOCK TO MAKE IT REUSABLE
 	def free_data_block(self, block_number): 
-		bit_map_blk_num = block_number / config.BLOCK_SIZE
+		bit_map_blk_num = sblock.BITMAP_BLOCKS_OFFSET + block_number / config.BLOCK_SIZE
 		bit_map_index = block_number % config.BLOCK_SIZE
 		bit_map_blk = list(__ascii_2_str__(__raid_read_block__(bit_map_blk_num)))
 		bit_map_blk[bit_map_index] = '0'
@@ -274,7 +280,7 @@ class Operations():
 		if len(r_inode)/8 < config.INODE_SIZE:
 			r_inode += __str_2_ascii__('\0'*(config.INODE_SIZE - len(r_inode)/8))
 
-		inode_blk_num = inode_number / sblock.INODES_PER_BLOCK
+		inode_blk_num = sblock.INODE_BLOCKS_OFFSET + inode_number / sblock.INODES_PER_BLOCK
 		inode_offset = inode_number % sblock.INODES_PER_BLOCK
 		inode_blk = __raid_read_block__(inode_blk_num)
 		inode_blk = inode_blk[: inode_offset*config.INODE_SIZE*8] + r_inode + inode_blk[(inode_offset+1)*config.INODE_SIZE*8 :]
@@ -284,7 +290,7 @@ class Operations():
 	
 	#RETURNS THE INODE FROM INODE NUMBER
 	def inode_number_to_inode(self, inode_number):
-		inode_blk_num = inode_number / sblock.INODES_PER_BLOCK
+		inode_blk_num = sblock.INODE_BLOCKS_OFFSET + inode_number / sblock.INODES_PER_BLOCK
 		inode_offset = inode_number % sblock.INODES_PER_BLOCK
 		r_inode = __raid_read_block__(inode_blk_num)[inode_offset*config.INODE_SIZE*8 : (inode_offset+1)*config.INODE_SIZE*8]
 		inode = [None for _ in range(8)]
