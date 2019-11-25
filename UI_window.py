@@ -1,6 +1,6 @@
-import config, FileSystem, client_stub
+import config, FileSystem, client_stub, sys
 interface = FileSystem.FileSystemOperations()
-FileSystem.Initialize_My_FileSystem()
+FileSystem.Initialize_My_FileSystem(sys.argv[0])
 while True:
 	command_str = raw_input("$ ")
 	command_list = command_str.split(' ')

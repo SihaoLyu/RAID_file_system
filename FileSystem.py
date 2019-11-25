@@ -1,7 +1,7 @@
 import MemoryInterface, AbsolutePathNameLayer
 
-def Initialize_My_FileSystem():
-    MemoryInterface.Initialize_My_FileSystem()
+def Initialize_My_FileSystem(server_num):
+    MemoryInterface.Initialize_My_FileSystem(server_num)
     AbsolutePathNameLayer.AbsolutePathNameLayer().new_entry('/', 1)
 
 #HANDLE TO ABSOLUTE PATH NAME LAYER
@@ -45,26 +45,24 @@ class FileSystemOperations():
 
 
 
-if __name__ == '__main__':
-    #DO NOT MODIFY THIS
-    Initialize_My_FileSystem()
-    my_object = FileSystemOperations()
-    # my_object.status()
-    #YOU MAY WRITE YOUR CODE AFTER HERE
+# if __name__ == '__main__':
+#     #DO NOT MODIFY THIS
+#     Initialize_My_FileSystem()
+#     my_object = FileSystemOperations()
+#     # my_object.status()
+#     #YOU MAY WRITE YOUR CODE AFTER HERE
 
-    offset = 1
+#     offset = 1
 
-    my_object.mkdir("/A")
-    # my_object.status()
-    my_object.mkdir("/B")
-    # my_object.status()
-    my_object.create("/A/1.txt") # as A is already there we can crete file in A
-    # my_object.status()
-    my_object.write("/A/1.txt", "POCSD", offset) # as 1.txt is already created now, we can write to it.
-    my_object.status()
-    # my_object.mv("/A/1.txt", "/B")
-    # my_object.status()
-    my_object.rm("/A/1.txt")
-    my_object.status()
-    
-
+#     my_object.mkdir("/A")
+#     # my_object.status()
+#     my_object.mkdir("/B")
+#     # my_object.status()
+#     my_object.create("/A/1.txt") # as A is already there we can crete file in A
+#     # my_object.status()
+#     my_object.write("/A/1.txt", "POCSD", offset) # as 1.txt is already created now, we can write to it.
+#     my_object.status()
+#     # my_object.mv("/A/1.txt", "/B")
+#     # my_object.status()
+#     my_object.rm("/A/1.txt")
+#     my_object.status()
