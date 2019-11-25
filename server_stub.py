@@ -20,6 +20,8 @@ def write(offset, data):
 
 port = int(sys.argv[1])
 server = SimpleXMLRPCServer(("localhost", port))
+print("Listening on port " + str(port) + "....")
+
 server.register_function(read, "read")
 server.register_function(write, "write")
 server.serve_forever()
