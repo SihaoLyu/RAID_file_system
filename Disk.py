@@ -3,7 +3,8 @@ import config
 class disk():
   TOTAL_NO_OF_BLOCKS = config.TOTAL_NO_OF_BLOCKS
   BLOCK_SIZE = config.BLOCK_SIZE  # bytes
-  DISK_SIZE = config.TOTAL_NO_OF_BLOCKS * config.BLOCK_SIZE
+  WHOLE_BLOCK_SIZE = config.WHOLE_BLOCK_SIZE
+  DISK_SIZE = config.TOTAL_NO_OF_BLOCKS * config.WHOLE_BLOCK_SIZE
   TRACK = ""
 
   def __init__(self):
