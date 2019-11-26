@@ -1,59 +1,65 @@
-import config, FileSystem, client_stub, sys
+import config, FileSystem, os, sys, Memory
 interface = FileSystem.FileSystemOperations()
-FileSystem.Initialize_My_FileSystem(sys.argv[0])
+client = Memory.client
+for i in range(int(sys.argv[1])):
+		os.system('gnome-terminal -e \"python server_stub.py ' + str(8000+i) + '\"')
+FileSystem.Initialize_My_FileSystem(int(sys.argv[1]))
 while True:
 	command_str = raw_input("$ ")
-	command_list = command_str.split(' ')
-	if len(command_list) == 2:
-		command = command_list[0]
+	raw_command_list = command_str.split(' ', 1)
+	command = raw_command_list[0]
+	if command == 'write':
+		data = command_str[command_str.index('"')+1 : command_str[command_str.index('"')+1:].index('"') + command_str.index('"')+1]
+		command_str = command_str.replace('"'+ data +'"', "", 1)
+		argv = command_str.split(" ")
+		while bool(argv.count('')):
+			argv.remove('')
+		path = argv[1]
+		offset = int(argv[2])
+		interface.write(path, data, offset)
+		continue
+	elif command == 'mkdir':
+		command_list = command_str.split(' ')
 		path = command_list[1]
-		if command == 'mkdir':
-			interface.mkdir(path)
-			continue
-		elif command == 'create':
-			interface.create(path)
-			continue
-		elif command == 'rm':
-			interface.rm(path)
-			continue
-		else:
-			print('Wrong command input, please check!')
-			continue
-	elif len(command_list) == 3:
-		command = command_list[0]
+		interface.mkdir(path)
+		continue
+	elif command == 'create':
+		command_list = command_str.split(' ')
+		path = command_list[1]
+		interface.create(path)
+		continue
+	elif command == 'mv':
+		command_list = command_str.split(' ')
 		old_path = command_list[1]
 		new_path = command_list[2]
-		if command == "mv":
-			interface.mv(old_path, new_path)
-			continue
-		else:
-			print('Wrong command input, please check!')
-			continue
-	elif len(command_list) == 4:
-		command = command_list[0]
-		path = command_list[1]
-		if command == 'read':
-			offset = command_list[2]
-			size = command_list[3]
-			interface.read(path, offset, size)
-			continue
-		elif command == 'write':
-			data = command_list[2]
-			offset = command_list[3]
-			interface.write(path, data, offset)
-			continue
-		else:
-			print('Wrong command input, please check!')
-			continue
-	elif len(command_list) == 1:
-		command = command_list[0]
-		if command == 'exit':
-			print('Exit command received.')
-			break
-		else:
-			print('Wrong command input, please check!')
-			continue
-	else:
-		print('Wrong command input, plz check!')
+		interface.mv(old_path, new_path)
 		continue
+	elif command == 'rm':
+		command_list = command_str.split(' ')
+		path = command_list[1]
+		interface.rm(path)
+		continue
+	elif command == 'read':
+		command_list = command_str.split(' ')
+		path = command_list[1]
+		offset = int(command_list[2])
+		size = int(command_list[3])
+		interface.read(path, offset, size)
+		continue
+	elif command == 'status':
+		interface.status()
+		continue
+	elif command == 'exit':
+		print('Filesystem exiting...')
+		break
+	elif command == "corruptdata":
+		server_id = int(command_list[1])
+		client.CorruptData(server_id)
+		continue
+	else:
+		print('Wrong command input, please check!')
+		continue
+
+
+	
 

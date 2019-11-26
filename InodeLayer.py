@@ -74,6 +74,7 @@ class InodeLayer():
                 blk_data += data[data_offset : data_offset + config.BLOCK_SIZE]
                 blk_data += interface.BLOCK_NUMBER_TO_DATA_BLOCK(blk)[len(blk_data):]    # if data.size < blk_size
                 data_offset += config.BLOCK_SIZE
+            
             interface.update_data_block(blk, blk_data)
         
         inode.time_modified = str(datetime.datetime.now())[:19]

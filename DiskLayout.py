@@ -6,7 +6,7 @@ import config, pickle
 
 class SuperBlock():
     def __init__(self):
-        self.TOTAL_NO_OF_BLOCKS = config.TOTAL_NO_OF_BLOCKS                     #DECIDED BY CONFIG FILE
+        self.TOTAL_NO_OF_BLOCKS = -1                                            #DECIDED BY CONFIG FILE, SHOULD MULTIPLY SERVER_NUM
         self.BLOCK_SIZE = config.BLOCK_SIZE                                     #DECIDED BY CONFIG FILE
         self.WHOLE_BLOCK_SIZE = config.WHOLE_BLOCK_SIZE                         #DECDIED BY CONFIG FILE
         self.MAX_NUM_INODES = config.MAX_NUM_INODES                             #DECIDED BY CONFIG FILE

@@ -35,9 +35,12 @@ import pickle, math
 # a = pickle.dumps(a)
 # print a
 
-a = '$ write   /A   "fafafa"   6'
-s = a[a.index('"')+1 : a[a.index('"')+1:].index('"') + a.index('"')+1]
-a = a.replace('"'+s+'"', "", 1)
-argv = a.split(" ")
-while bool(argv.count('')): argv.remove('')
-print argv
+# a = '$ write   /A   "fafafa"   6'
+# s = a[a.index('"')+1 : a[a.index('"')+1:].index('"') + a.index('"')+1]
+# a = a.replace('"'+s+'"', "", 1)
+# argv = a.split(" ")
+# while bool(argv.count('')): argv.remove('')
+# print argv
+
+for i in range(1):
+  print i

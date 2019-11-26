@@ -68,7 +68,7 @@ def __raid_read_block__(block_number):
 			if __if_data_block_match_checksum__(response):	return response[: config.BLOCK_SIZE*8]
 		else:	fail_servers.append(des_server_id)
 
-	rec_data = [None for _ in range(3)]
+	rec_data = []
 	for server_id in range(server_sets_offset*4, server_sets_offset*4+4):
 		server_id += 8000
 		if server_id == des_server_id: continue
@@ -85,7 +85,7 @@ def __raid_read_block__(block_number):
 				quit()
 			rec_data.append(int(response[: config.BLOCK_SIZE*8],2))
 
-	new_data = bin(rec_data[0] ^ rec_data[1] ^ rec_data[2]).replace('0b', '', 1).zfill(config.BLOCK_SIZE)
+	new_data = bin(rec_data[0] ^ rec_data[1] ^ rec_data[2]).replace('0b', '', 1).zfill(config.BLOCK_SIZE*8)
 	return new_data
 
 		
@@ -103,7 +103,7 @@ def __raid_write_block__(block_number, data):
 	for server_id in range(server_sets_offset*4, server_sets_offset*4+4):
 		server_id += 8000
 		if server_id in fail_servers:
-			parity_data.append(None)
+			if server_id != des_server_id and server_id != parity_server_id: parity_data.append(None)
 			fail_count += 1
 			continue
 		response = client.read(server_id, server_block_num*config.WHOLE_BLOCK_SIZE, config.WHOLE_BLOCK_SIZE)
@@ -117,7 +117,7 @@ def __raid_write_block__(block_number, data):
 			else: fail_count += 1
 		elif server_id == parity_server_id: 
 			if __if_data_block_match_checksum__(response):	parity = int(response[: config.BLOCK_SIZE*8], 2)
-			else:	fail_count += 1
+			else: fail_count += 1
 		else:	
 			if __if_data_block_match_checksum__(response):	parity_data.append(int(response[: config.BLOCK_SIZE*8], 2))
 			else: fail_count += 1
@@ -162,9 +162,15 @@ def __raid_write_block__(block_number, data):
 
 def __initialize__(server_num):
 	client.add_proxys(server_num)
+	sblock.TOTAL_NO_OF_BLOCKS = config.TOTAL_NO_OF_BLOCKS * server_num
+	#FLUSHING EMPTY DATA WITH CHECKSUM TO ALL DISKS
+	init_data = __str_2_ascii__('\0' * config.BLOCK_SIZE)
+	init_data += __checksum__(init_data)
+	init_data *= config.TOTAL_NO_OF_BLOCKS
+	for server_id in range(server_num): client.write(server_id+8000, 0, init_data)
 	#ALLOCATING BITMAP BLOCKS 0 AND 1 BLOCKS ARE RESERVED FOR BOOT BLOCK AND SUPERBLOCK
 	sblock.BITMAP_BLOCKS_OFFSET, count = 2, 2 
-	for _ in range(0, sblock.TOTAL_NO_OF_BLOCKS / sblock.BLOCK_SIZE):  	
+	for _ in range(0, (sblock.TOTAL_NO_OF_BLOCKS * 3) / (sblock.BLOCK_SIZE * 4)):  	
 		bitmap_block = '0' * config.BLOCK_SIZE
 		bitmap_block = __str_2_ascii__(bitmap_block)
 		__raid_write_block__(count, bitmap_block)
@@ -185,8 +191,9 @@ def __initialize__(server_num):
 	if len(bitmap_block) % config.BLOCK_SIZE != 0:
 		bitmap_block += '0' * (config.BLOCK_SIZE - len(bitmap_block) % config.BLOCK_SIZE)
 	for b_blk in range(len(bitmap_block) / config.BLOCK_SIZE):
+		data = __str_2_ascii__(bitmap_block[b_blk*config.BLOCK_SIZE : (b_blk+1)*config.BLOCK_SIZE])
 		b_blk += sblock.BITMAP_BLOCKS_OFFSET
-		__raid_write_block__(b_blk, __str_2_ascii__(bitmap_block[b_blk*config.BLOCK_SIZE : (b_blk+1)*config.BLOCK_SIZE]))
+		__raid_write_block__(b_blk, data)
 	
 	
 #OPERATIONS ON FILE SYSTEM
@@ -202,7 +209,7 @@ class Operations():
 
 		elif block_number >= sblock.BITMAP_BLOCKS_OFFSET and block_number < sblock.INODE_BLOCKS_OFFSET:
 			bit_map_blk = list(__ascii_2_str__(__raid_read_block__(block_number)))
-			for index in len(bit_map_blk):
+			for index in range(len(bit_map_blk)):
 				bit = bit_map_blk[index]
 				if bit == '2': bit_map_blk[index] = -1
 				else: bit_map_blk[index] = int(bit)
@@ -232,7 +239,7 @@ class Operations():
 					bit_map_blk[bit_index] = '1'
 					bit_map_blk = ''.join(bit_map_blk)
 					__raid_write_block__(blk_index, __str_2_ascii__(bit_map_blk))
-					return (blk_index*config.BLOCK_SIZE + bit_index)
+					return ((blk_index-sblock.BITMAP_BLOCKS_OFFSET)*config.BLOCK_SIZE + bit_index)
 
 		print("Memory: No valid blocks available")
 		return -1
@@ -253,6 +260,8 @@ class Operations():
 
 	#WRITES TO THE DATA BLOCK
 	def update_data_block(self, block_number, block_data):
+		old_block_data = __ascii_2_str__(__raid_read_block__(block_number))
+		block_data += old_block_data[len(block_data) :]
 		__raid_write_block__(block_number, __str_2_ascii__(block_data))
 		print("Memory: Data Copy Completes")
 	
@@ -262,23 +271,26 @@ class Operations():
 		# Need convert array-inode to raw-data
 		# If array-inode's size is not full, append \0 (str)
 		r_inode = ''
-		r_inode += __str_2_ascii__('0'+str(inode[0]))			# type => 2 bytes
-		r_inode += bin(int(__str_2_ascii__(inode[1]), 2) | int('1' + '0'*16*8, 2)).replace('0b1', '', 1)				# Name => 16 bytes
-		r_inode += bin(inode[2] | 2**(2*8)).replace('0b1', '', 1)			# links num	=> 2 bytes
-		r_inode += bin(int(__str_2_ascii__(inode[3]), 2) | int('1' + '0'*19*8, 2)).replace('0b1', '', 1)				# Time created	=> 19 bytes
-		r_inode += bin(int(__str_2_ascii__(inode[4]), 2) | int('1' + '0'*19*8, 2)).replace('0b1', '', 1)				# Time accessed	=> 19 bytes
-		r_inode += bin(int(__str_2_ascii__(inode[5]), 2) | int('1' + '0'*19*8, 2)).replace('0b1', '', 1)				# Time modified => 19 bytes
-		r_inode += bin(inode[6] | 2**(2*8)).replace('0b1', '', 1)			# Inode size => 2 bytes
-		if inode[0] == 0:
-			for blk in inode[7]:
-				if blk == -1:	r_inode += __str_2_ascii__('-1')		# '-1' takes 2 bytes by storing str
-				else: r_inode += bin(blk | 2**(2*8)).replace('0b1', '', 1)	# else blk num store true number
+
+		if inode == False:	r_inode = __str_2_ascii__('\0' * config.INODE_SIZE)
 		else:
-			for entry in inode[7]:
-				for word in entry:	r_inode += __str_2_ascii__(word)
-		
-		if len(r_inode)/8 < config.INODE_SIZE:
-			r_inode += __str_2_ascii__('\0'*(config.INODE_SIZE - len(r_inode)/8))
+			r_inode += __str_2_ascii__('0'+str(inode[0]))			# type => 2 bytes
+			r_inode += bin(int(__str_2_ascii__(inode[1]), 2) | int('1' + '0'*16*8, 2)).replace('0b1', '', 1)				# Name => 16 bytes
+			r_inode += bin(inode[2] | 2**(2*8)).replace('0b1', '', 1)			# links num	=> 2 bytes
+			r_inode += bin(int(__str_2_ascii__(inode[3]), 2) | int('1' + '0'*19*8, 2)).replace('0b1', '', 1)				# Time created	=> 19 bytes
+			r_inode += bin(int(__str_2_ascii__(inode[4]), 2) | int('1' + '0'*19*8, 2)).replace('0b1', '', 1)				# Time accessed	=> 19 bytes
+			r_inode += bin(int(__str_2_ascii__(inode[5]), 2) | int('1' + '0'*19*8, 2)).replace('0b1', '', 1)				# Time modified => 19 bytes
+			r_inode += bin(inode[6] | 2**(2*8)).replace('0b1', '', 1)			# Inode size => 2 bytes
+			if inode[0] == 0:
+				for blk in inode[7]:
+					if blk == -1:	r_inode += __str_2_ascii__('-1')		# '-1' takes 2 bytes by storing str
+					else: r_inode += bin(blk | 2**(2*8)).replace('0b1', '', 1)	# else blk num store true number
+			else:
+				for entry in inode[7]:
+					for word in entry:	r_inode += __str_2_ascii__(word)
+			
+			if len(r_inode)/8 < config.INODE_SIZE:
+				r_inode += __str_2_ascii__('\0'*(config.INODE_SIZE - len(r_inode)/8))
 
 		inode_blk_num = sblock.INODE_BLOCKS_OFFSET + inode_number / sblock.INODES_PER_BLOCK
 		inode_offset = inode_number % sblock.INODES_PER_BLOCK
@@ -427,4 +439,8 @@ if __name__ == '__main__':
 	# data = bin(data).replace('0b', '', 1).zfill(config.BLOCK_SIZE*8)
 	# print data == t
 
-	pass
+	__initialize__(4)
+	# data = 'ab' * (496/2)
+	# data = __str_2_ascii__(data)
+	# __raid_write_block__(50, data)
+	# print data == __raid_read_block__(50)

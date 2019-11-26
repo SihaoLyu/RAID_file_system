@@ -120,7 +120,7 @@ class FileNameLayer():
 
 		parent_inode_number = self.LOOKUP(path, inode_number_cwd)
 		parent_inode = interface.INODE_NUMBER_TO_INODE(parent_inode_number)
-		if not parent_inode_number:
+		if not parent_inode:
 			print('Unlink path wrong!')
 			return -1
 		

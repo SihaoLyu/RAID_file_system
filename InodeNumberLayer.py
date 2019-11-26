@@ -2,7 +2,7 @@
 THIS MODULE ACTS AS A INODE NUMBER LAYER. NOT ONLY IT SHARES DATA WITH INODE LAYER, BUT ALSO IT CONNECTS WITH MEMORY INTERFACE FOR INODE TABLE 
 UPDATES. THE INODE TABLE AND INODE NUMBER IS UPDATED IN THE FILE SYSTEM USING THIS LAYER
 '''
-import InodeLayer, config, MemoryInterface, datetime, InodeOps, MemoryInterface
+import InodeLayer, config, MemoryInterface, datetime, InodeOps
 
 
 #HANDLE OF INODE LAYER
@@ -15,7 +15,7 @@ class InodeNumberLayer():
 	def INODE_NUMBER_TO_INODE(self, inode_number):
 		array_inode = MemoryInterface.inode_number_to_inode(inode_number)
 		inode = InodeOps.InodeOperations().convert_array_to_table(array_inode)
-		if inode: inode.time_accessed = datetime.datetime.now()   #TIME OF ACCESS
+		if inode: inode.time_accessed = str(datetime.datetime.now())[:19]   #TIME OF ACCESS
 		return inode
 
 
@@ -32,7 +32,7 @@ class InodeNumberLayer():
 	#PLEASE DO NOT MODIFY
 	#UPDATES THE INODE TO THE INODE TABLE
 	def update_inode_table(self, table_inode, inode_number):
-		if table_inode: table_inode.time_modified = datetime.datetime.now()  #TIME OF MODIFICATION 
+		if table_inode: table_inode.time_modified = str(datetime.datetime.now())[:19]  #TIME OF MODIFICATION 
 		array_inode = InodeOps.InodeOperations().convert_table_to_array(table_inode)
 		MemoryInterface.update_inode_table(array_inode, inode_number)
 
@@ -70,7 +70,7 @@ class InodeNumberLayer():
 				return -1
 
 		file_inode = self.INODE_NUMBER_TO_INODE(file_inode_number)
-		file_inode.time_accessed = datetime.datetime.now()
+		file_inode.time_accessed = str(datetime.datetime.now())[:19]
 		file_inode.links += 1
 		file_inode.time_modified = str(datetime.datetime.now())[:19]
 		self. update_inode_table(file_inode, file_inode_number)
@@ -98,6 +98,8 @@ class InodeNumberLayer():
 		file_inode.time_modified = str(datetime.datetime.now())[:19]
 		if file_inode.links == 0:	# delete file
 			interface.free_data_block(file_inode, 0)
+			self.update_inode_table(False, inode_number)
+		elif file_inode.links == 1 and file_inode.type == 1:
 			self.update_inode_table(False, inode_number)
 		else:
 			self.update_inode_table(file_inode, inode_number)
