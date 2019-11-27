@@ -59,111 +59,140 @@ def __raid_block_mapping__(block_number):
 def __raid_read_block__(block_number):
 	# No response from one server, regenerate data from redundancy servers.
 	# data is binary
-	if block_number >= config.TOTAL_NO_OF_BLOCKS:	return -1
-	des_server_id, server_sets_offset, server_block_num, _ = __raid_block_mapping__(block_number)
+	if client.raid_mode == 1:
+		if block_number >= sblock.VALID_DATA_BLOCK_NUM:	return -1
+		for server_id in range(client.proxys_num):
+			server_id += 8000
+			if server_id in fail_servers: continue
+			response = client.read(server_id, block_number*config.WHOLE_BLOCK_SIZE, config.WHOLE_BLOCK_SIZE)
+			if response != None:
+				if __if_data_block_match_checksum__(response):	return response[: config.BLOCK_SIZE*8]
+			else: fail_servers.append(server_id)
+		print('FATAL ERROR! ALL DISKS FAIL!')
+		quit()
+			
+	else:
+		if block_number >= sblock.VALID_DATA_BLOCK_NUM:	return -1
+		des_server_id, server_sets_offset, server_block_num, _ = __raid_block_mapping__(block_number)
 
-	if des_server_id not in fail_servers:
-		response = client.read(des_server_id, server_block_num*config.WHOLE_BLOCK_SIZE, config.WHOLE_BLOCK_SIZE)
-		if response != None:	
-			if __if_data_block_match_checksum__(response):	return response[: config.BLOCK_SIZE*8]
-		else:	fail_servers.append(des_server_id)
+		if des_server_id not in fail_servers:
+			response = client.read(des_server_id, server_block_num*config.WHOLE_BLOCK_SIZE, config.WHOLE_BLOCK_SIZE)
+			if response != None:	
+				if __if_data_block_match_checksum__(response):	return response[: config.BLOCK_SIZE*8]
+			else:	fail_servers.append(des_server_id)
 
-	rec_data = []
-	for server_id in range(server_sets_offset*4, server_sets_offset*4+4):
-		server_id += 8000
-		if server_id == des_server_id: continue
-		if server_id in fail_servers:
-			print('FATAL ERROR! MORE THAN TWO RAID DISKS DECAY!')
-			quit()
-		response = client.read(server_id, server_block_num*config.WHOLE_BLOCK_SIZE, config.WHOLE_BLOCK_SIZE)
-		if response == None:
-			print('FATAL ERROR! MORE THAN TWO RAID DISKS DECAY!')
-			quit()
-		else:	
-			if not __if_data_block_match_checksum__(response):
+		rec_data = []
+		for server_id in range(server_sets_offset*4, server_sets_offset*4+4):
+			server_id += 8000
+			if server_id == des_server_id: continue
+			if server_id in fail_servers:
 				print('FATAL ERROR! MORE THAN TWO RAID DISKS DECAY!')
 				quit()
-			rec_data.append(int(response[: config.BLOCK_SIZE*8],2))
+			response = client.read(server_id, server_block_num*config.WHOLE_BLOCK_SIZE, config.WHOLE_BLOCK_SIZE)
+			if response == None:
+				print('FATAL ERROR! MORE THAN TWO RAID DISKS DECAY!')
+				quit()
+			else:	
+				if not __if_data_block_match_checksum__(response):
+					print('FATAL ERROR! MORE THAN TWO RAID DISKS DECAY!')
+					quit()
+				rec_data.append(int(response[: config.BLOCK_SIZE*8],2))
 
-	new_data = bin(rec_data[0] ^ rec_data[1] ^ rec_data[2]).replace('0b', '', 1).zfill(config.BLOCK_SIZE*8)
-	print('BLOCK ' + str(block_number) + ' WAS CORRUPTED, AND IS NOW REPAIRED')
-	return new_data
+		new_data = bin(rec_data[0] ^ rec_data[1] ^ rec_data[2]).replace('0b', '', 1).zfill(config.BLOCK_SIZE*8)
+		print('BLOCK ' + str(block_number) + ' WAS DAMAGED, AND IS NOW REPAIRED')
+		return new_data
 
 		
 def __raid_write_block__(block_number, data):
 	# data is binary
-	if block_number >= config.TOTAL_NO_OF_BLOCKS or len(data)/8 != config.BLOCK_SIZE:	return -1
-	des_server_id, server_sets_offset, server_block_num, parity_server_id = __raid_block_mapping__(block_number)
-	fail_count = 0
-	parity_data = []
-	parity = None
-	des = None
-	data = int(data, 2)
+	if client.raid_mode == 1:
+		if block_number >= sblock.VALID_DATA_BLOCK_NUM or len(data)/8 != config.BLOCK_SIZE:	return -1
+		for server_id in range(client.proxys_num):
+			server_id += 8000
+			if server_id in fail_servers: continue
+			rx_data = data + __checksum__(data)
+			response = client.write(server_id, block_number*config.WHOLE_BLOCK_SIZE, rx_data)
+			if response == None: fail_servers.append(server_id)
 
-	# check servers
-	for server_id in range(server_sets_offset*4, server_sets_offset*4+4):
-		server_id += 8000
-		if server_id in fail_servers:
-			if server_id != des_server_id and server_id != parity_server_id: parity_data.append(None)
-			fail_count += 1
-			continue
-		response = client.read(server_id, server_block_num*config.WHOLE_BLOCK_SIZE, config.WHOLE_BLOCK_SIZE)
-		if response == None:	
-			fail_servers.append(server_id)
-			parity_data.append(None)
-			fail_count += 1
-			continue
-		if server_id == des_server_id: 
-			if __if_data_block_match_checksum__(response):	des = int(response[: config.BLOCK_SIZE*8], 2)
-			else: fail_count += 1
-		elif server_id == parity_server_id: 
-			if __if_data_block_match_checksum__(response):	parity = int(response[: config.BLOCK_SIZE*8], 2)
-			else: fail_count += 1
-		else:	
-			if __if_data_block_match_checksum__(response):	parity_data.append(int(response[: config.BLOCK_SIZE*8], 2))
-			else: fail_count += 1
-
-	# calculate parity according to failure condition
-	if fail_count >= 2:
-		print('FATAL ERROR! MORE THAN 2 DISKS FAIL & SYS FAILS!')
-		quit()
-	elif fail_count == 1:
-		if des == None:
-			parity = data
-			for pdata in parity_data:	parity ^= pdata
-		elif parity == None: pass
-		else:
-			fail_index = parity_data.index(None)
-			parity_data.pop(fail_index)
-			rec_data = des ^ parity
-			for pdata in parity_data:	rec_data ^= pdata		# use old parity to reconstruct bad data
-			parity_data.insert(fail_index, rec_data)
-			parity = data
-			for pdata in parity_data:	parity ^= pdata 		# then use reconstructed data to build new parity
 	else:
-			parity = data
-			for pdata in parity_data: parity ^= pdata
-	
-	# write parity and data
-	if des != None: 
-		data = bin(data).replace('0b', '', 1).zfill(config.BLOCK_SIZE*8)
-		data += __checksum__(data)
-		response = client.write(des_server_id, server_block_num*config.WHOLE_BLOCK_SIZE, data)
-		if response == None:
-			fail_servers.append(des_server_id)
-			# return -1
-	
-	if parity != None:
-		parity = bin(parity).replace('0b', '', 1).zfill(config.BLOCK_SIZE*8)
-		parity += __checksum__(parity)
-		response = client.write(parity_server_id, server_block_num*config.WHOLE_BLOCK_SIZE, parity)
-		if response == None:
-			fail_servers.append(parity_server_id)
+		if block_number >= sblock.VALID_DATA_BLOCK_NUM or len(data)/8 != config.BLOCK_SIZE:	return -1
+		des_server_id, server_sets_offset, server_block_num, parity_server_id = __raid_block_mapping__(block_number)
+		fail_count = 0
+		parity_data = []
+		parity = None
+		des = None
+		data = int(data, 2)
+
+		# check servers
+		for server_id in range(server_sets_offset*4, server_sets_offset*4+4):
+			server_id += 8000
+			if server_id in fail_servers:
+				if server_id != des_server_id and server_id != parity_server_id: parity_data.append(None)
+				fail_count += 1
+				continue
+			response = client.read(server_id, server_block_num*config.WHOLE_BLOCK_SIZE, config.WHOLE_BLOCK_SIZE)
+			if response == None:	
+				fail_servers.append(server_id)
+				parity_data.append(None)
+				fail_count += 1
+				continue
+			if server_id == des_server_id: 
+				if __if_data_block_match_checksum__(response):	des = int(response[: config.BLOCK_SIZE*8], 2)
+				else: fail_count += 1
+			elif server_id == parity_server_id: 
+				if __if_data_block_match_checksum__(response):	parity = int(response[: config.BLOCK_SIZE*8], 2)
+				else: fail_count += 1
+			else:	
+				if __if_data_block_match_checksum__(response):	parity_data.append(int(response[: config.BLOCK_SIZE*8], 2))
+				else: fail_count += 1
+
+		# calculate parity according to failure condition
+		if fail_count >= 2:
+			print('FATAL ERROR! MORE THAN 2 DISKS FAIL & SYS FAILS!')
+			quit()
+		elif fail_count == 1:
+			if des == None:
+				parity = data
+				for pdata in parity_data:	parity ^= pdata
+			elif parity == None: pass
+			else:
+				fail_index = parity_data.index(None)
+				parity_data.pop(fail_index)
+				rec_data = des ^ parity
+				for pdata in parity_data:	rec_data ^= pdata		# use old parity to reconstruct bad data
+				parity_data.insert(fail_index, rec_data)
+				parity = data
+				for pdata in parity_data:	parity ^= pdata 		# then use reconstructed data to build new parity
+		else:
+				parity = data
+				for pdata in parity_data: parity ^= pdata
+		
+		# write parity and data
+		if des != None: 
+			data = bin(data).replace('0b', '', 1).zfill(config.BLOCK_SIZE*8)
+			data += __checksum__(data)
+			response = client.write(des_server_id, server_block_num*config.WHOLE_BLOCK_SIZE, data)
+			if response == None:
+				fail_servers.append(des_server_id)
+				# return -1
+		
+		if parity != None:
+			parity = bin(parity).replace('0b', '', 1).zfill(config.BLOCK_SIZE*8)
+			parity += __checksum__(parity)
+			response = client.write(parity_server_id, server_block_num*config.WHOLE_BLOCK_SIZE, parity)
+			if response == None:
+				fail_servers.append(parity_server_id)
 
 
-def __initialize__(server_num):
+def __initialize__(server_num, raid_mode):
 	client.add_proxys(server_num)
-	sblock.TOTAL_NO_OF_BLOCKS = config.TOTAL_NO_OF_BLOCKS * server_num
+	client.set_raid_mode(raid_mode)
+	if raid_mode == 1: 
+		sblock.TOTAL_NO_OF_BLOCKS = config.TOTAL_NO_OF_BLOCKS
+		sblock.VALID_DATA_BLOCK_NUM = sblock.TOTAL_NO_OF_BLOCKS
+	else: 
+		sblock.TOTAL_NO_OF_BLOCKS = config.TOTAL_NO_OF_BLOCKS * server_num
+		sblock.VALID_DATA_BLOCK_NUM = int(sblock.TOTAL_NO_OF_BLOCKS * float(3) / float(4))
 	#FLUSHING EMPTY DATA WITH CHECKSUM TO ALL DISKS
 	init_data = __str_2_ascii__('\0' * config.BLOCK_SIZE)
 	init_data += __checksum__(init_data)
@@ -171,7 +200,9 @@ def __initialize__(server_num):
 	for server_id in range(server_num): client.write(server_id+8000, 0, init_data)
 	#ALLOCATING BITMAP BLOCKS 0 AND 1 BLOCKS ARE RESERVED FOR BOOT BLOCK AND SUPERBLOCK
 	sblock.BITMAP_BLOCKS_OFFSET, count = 2, 2 
-	for _ in range(0, (sblock.TOTAL_NO_OF_BLOCKS * 3) / (sblock.BLOCK_SIZE * 4)):  	
+	bitmap_block_num = sblock.TOTAL_NO_OF_BLOCKS / sblock.BLOCK_SIZE
+	if raid_mode != 1: bitmap_block_num = int(bitmap_block_num * float(3) / 4)
+	for _ in range(0, bitmap_block_num):  	
 		bitmap_block = '0' * config.BLOCK_SIZE
 		bitmap_block = __str_2_ascii__(bitmap_block)
 		__raid_write_block__(count, bitmap_block)
@@ -184,7 +215,7 @@ def __initialize__(server_num):
 		count  += 1
 	#ALLOCATING DATA BLOCKS
 	sblock.DATA_BLOCKS_OFFSET = count
-	for blk_num in range(count, sblock.TOTAL_NO_OF_BLOCKS):
+	for blk_num in range(count, sblock.VALID_DATA_BLOCK_NUM):
 		init_data = __str_2_ascii__('\0' * config.BLOCK_SIZE)
 		__raid_write_block__(blk_num, init_data)
 	#MAKING BLOCKS BEFORE DATA BLOCKS UNAVAILABLE FOR USE SINCE OCCUPIED BY SUPERBLOCK, BOOTBLOCK, BITMAP AND INODE TABLE
@@ -199,8 +230,8 @@ def __initialize__(server_num):
 	
 #OPERATIONS ON FILE SYSTEM
 class Operations():
-	def initialize(self, server_num):
-		__initialize__(server_num)
+	def initialize(self, server_num, raid_mode):
+		__initialize__(server_num, raid_mode)
 
 
 	#RETURNS THE DATA OF THE BLOCK
@@ -264,8 +295,10 @@ class Operations():
 		old_block_data = __ascii_2_str__(__raid_read_block__(block_number))
 		block_data += old_block_data[len(block_data) :]
 		__raid_write_block__(block_number, __str_2_ascii__(block_data))
-		print('WRITING TO BLOCK ' + str(__raid_block_mapping__(block_number)[0]) + '...')
-		# print("Memory: Data Copy Completes")
+		if client.raid_mode == 1:
+			print('WRITING TO ALL SERVERS ...')
+		else:
+			print('WRITING TO SERVER: ' + str(__raid_block_mapping__(block_number)[0]) + '...')
 	
 	
 	#UPDATES INODE TABLE WITH UPDATED INODE

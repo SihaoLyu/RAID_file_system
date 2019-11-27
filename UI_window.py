@@ -5,13 +5,14 @@ for i in range(int(sys.argv[1])):
 		os.system('gnome-terminal -e \"python server_stub.py ' + str(8000+i) + '\"')
 
 #GET SERVER PID
-pid_table = os.popen(r'ps a | grep "stub"').readlines()
-pid_num = []
-for entry in pid_table:
-	if entry.find('server_stub.py') != -1: pid_num.append(entry)
-for index in range(len(pid_num)):	pid_num[index] = pid_num[index].split(" ")[1]
+# pid_table = os.popen(r'ps a | grep "stub"').readlines()
+# pid_num = []
+# for entry in pid_table:
+# 	if entry.find('server_stub.py') != -1: pid_num.append(entry)
+# for index in range(len(pid_num)):	pid_num[index] = pid_num[index].split(" ")[0]
 
-FileSystem.Initialize_My_FileSystem(int(sys.argv[1]))
+raid_mode = int(input('Please input raid mode (1 for RAID-1, 5 for RAID-5): '))
+FileSystem.Initialize_My_FileSystem(int(sys.argv[1]), raid_mode)
 while True:
 	command_str = raw_input("$ ")
 	raw_command_list = command_str.split(' ', 1)
@@ -80,7 +81,7 @@ while True:
 			print('ERROR IN COMMAND INPUT, PLZ CHECK!')
 	elif command == 'exit':
 		print('Filesystem exiting...')
-		for pid in pid_num: os.system('kill ' + str(pid))
+		# for pid in pid_num: os.system('kill ' + str(pid))
 		break
 	elif command == "corruptdata":
 		try:

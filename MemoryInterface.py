@@ -8,11 +8,11 @@ filesystem = Memory.Operations()
 
 
 #REQUEST TO BOOT THE FILE SYSTEM
-def Initialize_My_FileSystem(server_num):
+def Initialize_My_FileSystem(server_num, raid_mode):
     print("File System Initializing......")
     time.sleep(2)
     # state = Memory.Initialize()
-    filesystem.initialize(server_num)
+    filesystem.initialize(server_num, raid_mode)
     print("File System Initialized!")
 
 

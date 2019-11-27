@@ -4,7 +4,12 @@ import xmlrpclib, config, pickle, os, random
 class client_stub():
 	proxys = []
 	proxys_num = 0
+	raid_mode = -1
 
+	def set_raid_mode(self,raid_mode):
+		self.raid_mode = raid_mode
+
+	
 	def add_proxys(self, server_num):
 		for num in range(server_num):
 			port = 8000 + num
@@ -45,7 +50,7 @@ class client_stub():
 		#corrupt_blk = random.randint(0,config.TOTAL_NO_OF_BLOCKS)
 		corrupt_blk = random.randint(0,4)
 		corrupt_bit = random.randint(0,config.WHOLE_BLOCK_SIZE)
-		data = self.read(server_id, corrupt_blk * config.WHOLE_BLOCK_SIZE, config.WHOLE_BLOCK_SIZE)
+		data = self.read(server_id + 8000, corrupt_blk * config.WHOLE_BLOCK_SIZE, config.WHOLE_BLOCK_SIZE)
 		if not data:
 			print('CORRUPTED DATA BLOCK LANDED ON BAD SERVER')
 			return 
@@ -57,7 +62,7 @@ class client_stub():
 			pass
 		else:
 			pass
-		self.write(server_id + 8000, corrupt_blk * config.BLOCK_SIZE, data)
+		self.write(server_id + 8000, corrupt_blk * config.WHOLE_BLOCK_SIZE, data)
 
 if __name__ == '__main__':
 	for i in range(4):

@@ -1,7 +1,7 @@
 import MemoryInterface, AbsolutePathNameLayer
 
-def Initialize_My_FileSystem(server_num):
-    MemoryInterface.Initialize_My_FileSystem(server_num)
+def Initialize_My_FileSystem(server_num, raid_mode):
+    MemoryInterface.Initialize_My_FileSystem(server_num, raid_mode)
     AbsolutePathNameLayer.AbsolutePathNameLayer().new_entry('/', 1)
 
 #HANDLE TO ABSOLUTE PATH NAME LAYER
