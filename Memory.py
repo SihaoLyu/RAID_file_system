@@ -86,6 +86,7 @@ def __raid_read_block__(block_number):
 			rec_data.append(int(response[: config.BLOCK_SIZE*8],2))
 
 	new_data = bin(rec_data[0] ^ rec_data[1] ^ rec_data[2]).replace('0b', '', 1).zfill(config.BLOCK_SIZE*8)
+	print('BLOCK ' + str(block_number) + ' WAS CORRUPTED, AND IS NOW REPAIRED')
 	return new_data
 
 		
@@ -263,7 +264,8 @@ class Operations():
 		old_block_data = __ascii_2_str__(__raid_read_block__(block_number))
 		block_data += old_block_data[len(block_data) :]
 		__raid_write_block__(block_number, __str_2_ascii__(block_data))
-		print("Memory: Data Copy Completes")
+		print('WRITING TO BLOCK ' + str(__raid_block_mapping__(block_number)[0]) + '...')
+		# print("Memory: Data Copy Completes")
 	
 	
 	#UPDATES INODE TABLE WITH UPDATED INODE

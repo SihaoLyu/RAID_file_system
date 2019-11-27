@@ -45,18 +45,19 @@ class client_stub():
 		#corrupt_blk = random.randint(0,config.TOTAL_NO_OF_BLOCKS)
 		corrupt_blk = random.randint(0,4)
 		corrupt_bit = random.randint(0,config.WHOLE_BLOCK_SIZE)
-		data = self.read(server_id, corrupt_blk * config.WHOLE_BLOCK_SIZE, config.WHOLE_BLOCK_SIZE) 
+		data = self.read(server_id, corrupt_blk * config.WHOLE_BLOCK_SIZE, config.WHOLE_BLOCK_SIZE)
+		if not data:
+			print('CORRUPTED DATA BLOCK LANDED ON BAD SERVER')
+			return 
 		if data[corrupt_bit] == '1' :
 			data = data[0:corrupt_bit] + '0' + data[corrupt_bit + 1: ]
-			print 1111111
 			pass
 		elif data[corrupt_bit] == '0' :
 			data = data[0:corrupt_bit] + '1' + data[corrupt_bit + 1: ]
-			print 2222222
 			pass
 		else:
 			pass
-		self.write(server_id, corrupt_blk * config.BLOCK_SIZE, data)
+		self.write(server_id + 8000, corrupt_blk * config.BLOCK_SIZE, data)
 
 if __name__ == '__main__':
 	for i in range(4):
