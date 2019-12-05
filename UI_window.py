@@ -1,6 +1,7 @@
 import config, FileSystem, os, sys, Memory
 interface = FileSystem.FileSystemOperations()
 client = Memory.client
+MemoryOps = Memory.Operations()
 for i in range(int(sys.argv[1])):
 		os.system('gnome-terminal -e \"python server_stub.py ' + str(8000+i) + '\"')
 
@@ -77,6 +78,15 @@ while True:
 		try:
 			interface.status()
 			continue
+		except Exception as err:
+			print('ERROR IN COMMAND INPUT, PLZ CHECK!')
+	elif command == 'count':
+		try:
+			request_count = MemoryOps.server_request_counter()
+			for i in range(len(request_count)):
+				server_number = i + 8000
+				print('Number of request handled by server No.' + str(server_number) + ' is ' + str(request_count[i]))
+				continue
 		except Exception as err:
 			print('ERROR IN COMMAND INPUT, PLZ CHECK!')
 	elif command == 'exit':

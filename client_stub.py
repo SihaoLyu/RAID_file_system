@@ -5,6 +5,7 @@ class client_stub():
 	proxys = []
 	proxys_num = 0
 	raid_mode = -1
+	request_count = []
 
 	def set_raid_mode(self,raid_mode):
 		self.raid_mode = raid_mode
@@ -16,6 +17,7 @@ class client_stub():
 			URL = r"http://localhost:" + str(port) + r"/"
 			self.proxys.append(xmlrpclib.ServerProxy(URL))
 			self.proxys_num += 1
+			self.request_count.append(0)
 
 
 	def read(self, server_id, offset, length):
@@ -28,7 +30,7 @@ class client_stub():
 				break
 			except Exception as err:
 				print(err.args)
-
+		self.request_count[server_id - 8000] += 1
 		return data
 
 
@@ -44,6 +46,7 @@ class client_stub():
 				print(err.args)
 
 		if msg == None:	print("RPC write error!")
+		self.request_count[server_id - 8000] += 1
 		return msg
 
 	def CorruptData(self, server_id):
@@ -63,6 +66,10 @@ class client_stub():
 		else:
 			pass
 		self.write(server_id + 8000, corrupt_blk * config.WHOLE_BLOCK_SIZE, data)
+	
+	#COUNT THE NUMBER OF REQUEST DISTRUBUTED AMONG SERVER
+	def server_request_count(self):
+		return self.request_count
 
 if __name__ == '__main__':
 	for i in range(4):

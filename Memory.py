@@ -424,6 +424,10 @@ class Operations():
 					string += "\n"
 		
 		return string
+	
+	def server_request_counter(self):
+		retVal = client.server_request_count()
+		return retVal
 
 
 if __name__ == '__main__':
