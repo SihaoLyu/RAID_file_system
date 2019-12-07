@@ -310,7 +310,7 @@ class Operations():
 		if inode == False:	r_inode = __str_2_ascii__('\0' * config.INODE_SIZE)
 		else:
 			r_inode += __str_2_ascii__('0'+str(inode[0]))			# type => 2 bytes
-			r_inode += bin(int(__str_2_ascii__(inode[1]), 2) | int('1' + '0'*16*8, 2)).replace('0b1', '', 1)				# Name => 16 bytes
+			r_inode += bin(int(__str_2_ascii__(inode[1]), 2) | int('1' + '0'*config.MAX_FILE_NAME_SIZE*8, 2)).replace('0b1', '', 1)				# Name => 16 bytes
 			r_inode += bin(inode[2] | 2**(2*8)).replace('0b1', '', 1)			# links num	=> 2 bytes
 			r_inode += bin(int(__str_2_ascii__(inode[3]), 2) | int('1' + '0'*19*8, 2)).replace('0b1', '', 1)				# Time created	=> 19 bytes
 			r_inode += bin(int(__str_2_ascii__(inode[4]), 2) | int('1' + '0'*19*8, 2)).replace('0b1', '', 1)				# Time accessed	=> 19 bytes
@@ -347,9 +347,9 @@ class Operations():
 
 		inode[0] = int(__ascii_2_str__(r_inode[:2*8]))
 		count += 2*8
-		name = bin(int(r_inode[count:count+16*8], 2) | 0).replace('0b', '', 1)
+		name = bin(int(r_inode[count:count+config.MAX_FILE_NAME_SIZE*8], 2) | 0).replace('0b', '', 1)
 		inode[1] = __ascii_2_str__(name.zfill(len(name)+(8-len(name)%8)))
-		count += 16*8
+		count += config.MAX_FILE_NAME_SIZE*8
 		inode[2] = int(r_inode[count:count+2*8], 2)
 		count += 2*8
 		inode[3] = __ascii_2_str__(r_inode[count:count+19*8])
